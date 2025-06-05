@@ -13,6 +13,7 @@
 #include "lwip/sys.h"
 #include "lwip/ip.h"
 #include "lwip/netdb.h"
+#include "lwip/tcpip.h"
 
 #include "esp32-hal-log.h"
 
@@ -80,6 +81,8 @@ bool WireGuard::begin(const IPAddress& localIP, const IPAddress& Subnet, const I
 		log_e(TAG "failed to get endpoint ip.");
 		return false;
 	}
+	
+	LOCK_TCPIP_CORE();
 	// Register the new WireGuard network interface with lwIP
 	wg_netif = netif_add(&wg_netif_struct, ip_2_ip4(&ipaddr), ip_2_ip4(&netmask), ip_2_ip4(&gateway), &wg, &wireguardif_init, &ip_input);
 	if( wg_netif == nullptr ) {
@@ -88,6 +91,8 @@ bool WireGuard::begin(const IPAddress& localIP, const IPAddress& Subnet, const I
 	}
 	// Mark the interface as administratively up, link up flag is set automatically when peer connects
 	netif_set_up(wg_netif);
+	netif_set_link_up(wg_netif);
+	UNLOCK_TCPIP_CORE();
 
 	peer.public_key = remotePeerPublicKey;
 	peer.preshared_key = NULL;
@@ -112,7 +117,9 @@ bool WireGuard::begin(const IPAddress& localIP, const IPAddress& Subnet, const I
 		// Save the current default interface for restoring when shutting down the WG interface.
 		previous_default_netif = netif_default;
 		// Set default interface to WG device.
+				LOCK_TCPIP_CORE();
         netif_set_default(wg_netif);
+				UNLOCK_TCPIP_CORE();
 	}
 
 	this->_is_initialized = true;
@@ -129,6 +136,7 @@ bool WireGuard::begin(const IPAddress& localIP, const char* privateKey, const ch
 void WireGuard::end() {
 	if( !this->_is_initialized ) return;
 
+	LOCK_TCPIP_CORE();
 	// Restore the default interface.
 	netif_set_default(previous_default_netif);
 	previous_default_netif = nullptr;
@@ -141,7 +149,8 @@ void WireGuard::end() {
 	wireguardif_shutdown(wg_netif);
 	// Remove the WG interface;
 	netif_remove(wg_netif);
-	wg_netif = nullptr;
+	UNLOCK_TCPIP_CORE();
 
+	wg_netif = nullptr;
 	this->_is_initialized = false;
 }
