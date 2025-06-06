@@ -89,17 +89,13 @@ static err_t wireguardif_peer_output(struct netif *netif, struct pbuf *q, struct
 	struct wireguard_device *device = (struct wireguard_device *)netif->state;
 	// Send to last know port, not the connect port
 	//TODO: Support DSCP and ECN - lwip requires this set on PCB globally, not per packet
-	LOCK_TCPIP_CORE();
 	err_t err = udp_sendto_if(device->udp_pcb, q, &peer->ip, peer->port, device->underlying_netif);
-	UNLOCK_TCPIP_CORE();
 
 	return err;
 }
 
 static err_t wireguardif_device_output(struct wireguard_device *device, struct pbuf *q, const ip_addr_t *ipaddr, u16_t port) {
-	LOCK_TCPIP_CORE();
 	err_t err = udp_sendto_if(device->udp_pcb, q, ipaddr, port, device->underlying_netif);
-	UNLOCK_TCPIP_CORE();
 	return err;
 }
 
@@ -231,9 +227,7 @@ static void wireguardif_process_response_message(struct wireguard_device *device
 		wireguardif_send_keepalive(device, peer);
 
 		// Set the IF-UP flag on netif
-		LOCK_TCPIP_CORE();
 		netif_set_link_up(device->netif);
-		UNLOCK_TCPIP_CORE();
 	} else {
 		// Packet bad
 		log_i(TAG "bad handshake from %08x:%d", addr->u_addr.ip4.addr, port);
@@ -320,9 +314,7 @@ static void wireguardif_process_data_message(struct wireguard_device *device, st
 					}
 
 					// Make sure that link is reported as up
-					LOCK_TCPIP_CORE();
 					netif_set_link_up(device->netif);
-					UNLOCK_TCPIP_CORE();
 
 					if (pbuf->tot_len > 0) {
 						//4a. Once the packet payload is decrypted, the interface has a plaintext packet. If this is not an IP packet, it is dropped.
@@ -902,9 +894,7 @@ static void wireguardif_tmr(void *arg) {
 
 	if (!link_up) {
 		// Clear the IF-UP flag on netif
-		LOCK_TCPIP_CORE();
 		netif_set_link_down(device->netif);
-		UNLOCK_TCPIP_CORE();
 	}
 }
 
@@ -917,10 +907,8 @@ void wireguardif_shutdown(struct netif *netif) {
 	sys_untimeout(wireguardif_tmr, device);
 	// remove UDP context.
 	if( device->udp_pcb ) {
-		LOCK_TCPIP_CORE();
 		udp_disconnect(device->udp_pcb);
 		udp_remove(device->udp_pcb);
-		UNLOCK_TCPIP_CORE();
 		device->udp_pcb = NULL;
 	}
 	// remove device context.
@@ -950,9 +938,7 @@ err_t wireguardif_init(struct netif *netif) {
 	    result = ERR_IF;
 	    goto fail;
 	}
-	LOCK_TCPIP_CORE();
 	underlying_netif = netif_find(lwip_netif_name);
-	UNLOCK_TCPIP_CORE();
 	if (underlying_netif == NULL) {
 	    ESP_LOGE(TAG, "netif_find: cannot find WIFI_STA_DEF");
 	    result = ERR_IF;
@@ -979,14 +965,10 @@ err_t wireguardif_init(struct netif *netif) {
 		if (wireguard_base64_decode(init_data->private_key, private_key, &private_key_len)
 				&& (private_key_len == WIREGUARD_PRIVATE_KEY_LEN)) {
 			
-			LOCK_TCPIP_CORE();
 			udp = udp_new();
-			UNLOCK_TCPIP_CORE();
 
 			if (udp) {
-				LOCK_TCPIP_CORE();
 				result = udp_bind(udp, IP_ADDR_ANY, init_data->listen_port); // Note this listens on all interfaces! Really just want the passed netif
-				UNLOCK_TCPIP_CORE();
 
 				if (result == ERR_OK) {
 					device = (struct wireguard_device *)mem_calloc(1, sizeof(struct wireguard_device));
@@ -1017,9 +999,7 @@ err_t wireguardif_init(struct netif *netif) {
 							// NETIF_FLAG_LINK_UP is automatically set/cleared when at least one peer is connected
 							netif->flags = 0;
 
-							LOCK_TCPIP_CORE();
 							udp_recv(udp, wireguardif_network_rx, device);
-							UNLOCK_TCPIP_CORE();
 
 							// Start a periodic timer for this wireguard device
 							sys_timeout(WIREGUARDIF_TIMER_MSECS, wireguardif_tmr, device);
@@ -1029,23 +1009,17 @@ err_t wireguardif_init(struct netif *netif) {
 							log_e(TAG "failed to initialize WireGuard device.");
 							mem_free(device);
 							device = NULL;
-							LOCK_TCPIP_CORE();
 							udp_remove(udp);
-							UNLOCK_TCPIP_CORE();
 							result = ERR_ARG;
 						}
 					} else {
 						log_e(TAG "failed to allocate device context.");
-						LOCK_TCPIP_CORE();
 						udp_remove(udp);
-						UNLOCK_TCPIP_CORE();
 						result = ERR_MEM;
 					}
 				} else {
 					log_e(TAG "failed to bind UDP err=%d", result);
-					LOCK_TCPIP_CORE();
 					udp_remove(udp);
-					UNLOCK_TCPIP_CORE();
 				}
 
 			} else {
