@@ -24,7 +24,8 @@
 
 #include "esp32-hal-log.h"
 
-extern "C" {
+extern "C"
+{
 #include "wireguardif.h"
 #include "wireguard-platform.h"
 }
@@ -38,57 +39,60 @@ static uint8_t wireguard_peer_index = WIREGUARDIF_INVALID_INDEX;
 
 #define TAG "[WireGuard] "
 
-typedef struct {
-    esp_netif_driver_base_t base;
-    struct netif *lwip_nif;
+typedef struct
+{
+	esp_netif_driver_base_t base;
+	struct netif *lwip_nif;
 } wg_driver_glue_t;
 
 static err_t wg_lwip_init(netif *netif)
 {
-    return ERR_OK;
+	return ERR_OK;
 }
 
 static void wg_lwip_input(void *h, void *buffer, size_t len, void *eb)
 {
-    if (buffer) {
-        pbuf_free((struct pbuf *)buffer);
-    }
+	if (buffer)
+	{
+		pbuf_free((struct pbuf *)buffer);
+	}
 }
 
 static esp_err_t wg_driver_transmit(void *h, void *buffer, size_t len)
 {
-    log_w(TAG, "wg_driver_transmit called unexpectedly, len=%u", (unsigned)len);
-    esp_netif_free_rx_buffer(h, buffer);
+	log_w(TAG, "wg_driver_transmit called unexpectedly, len=%u", (unsigned)len);
+	esp_netif_free_rx_buffer(h, buffer);
 
-    return ESP_OK;
+	return ESP_OK;
 }
 
 static void wg_driver_free_rx(void *h, void *buffer) {}
 
 static esp_err_t wg_post_attach(esp_netif_t *esp_netif, void *args)
 {
-    wg_driver_glue_t *glue = (wg_driver_glue_t *)args;
-    const esp_netif_driver_ifconfig_t ifc = {
-        .handle               = glue,
-        .transmit             = wg_driver_transmit,
-        .driver_free_rx_buffer= wg_driver_free_rx,
-    };
-    esp_netif_set_driver_config(esp_netif, &ifc);
-    glue->base.netif = esp_netif;
+	wg_driver_glue_t *glue = (wg_driver_glue_t *)args;
+	const esp_netif_driver_ifconfig_t ifc = {
+			.handle = glue,
+			.transmit = wg_driver_transmit,
+			.driver_free_rx_buffer = wg_driver_free_rx,
+	};
+	esp_netif_set_driver_config(esp_netif, &ifc);
+	glue->base.netif = esp_netif;
 
-    return ESP_OK;
+	return ESP_OK;
 }
 
 /* ------------------------------------------------------------- */
 static wg_driver_glue_t *create_wg_glue(struct netif *lwip)
 {
-    auto *g = (wg_driver_glue_t*)calloc(1, sizeof(wg_driver_glue_t));
-		g->base.post_attach = wg_post_attach;
-    g->lwip_nif                = lwip;
-    return g;
+	auto *g = (wg_driver_glue_t *)calloc(1, sizeof(wg_driver_glue_t));
+	g->base.post_attach = wg_post_attach;
+	g->lwip_nif = lwip;
+	return g;
 }
 
-bool WireGuard::begin(const IPAddress& localIP, const IPAddress& Subnet, const IPAddress& Gateway, const char* privateKey, const char* remotePeerAddress, const char* remotePeerPublicKey, uint16_t remotePeerPort) {
+bool WireGuard::begin(const IPAddress &localIP, const IPAddress &Subnet, const IPAddress &Gateway, const char *privateKey, const char *remotePeerAddress, const char *remotePeerPublicKey, uint16_t remotePeerPort)
+{
 	struct wireguardif_init_data wg;
 	struct wireguardif_peer peer;
 	ip_addr_t ipaddr = IPADDR4_INIT(static_cast<uint32_t>(localIP));
@@ -102,48 +106,46 @@ bool WireGuard::begin(const IPAddress& localIP, const IPAddress& Subnet, const I
 
 	// Setup the WireGuard device structure
 	wg.private_key = privateKey;
-    wg.listen_port = remotePeerPort;
-	
+	wg.listen_port = remotePeerPort;
+
 	wg.bind_netif = NULL;
 
 	// Initialise the first WireGuard peer structure
 	wireguardif_peer_init(&peer);
 	// If we know the endpoint's address can add here
 	bool success_get_endpoint_ip = false;
-    for(int retry = 0; retry < 5; retry++) {
-        ip_addr_t endpoint_ip = IPADDR4_INIT_BYTES(0, 0, 0, 0);
-        struct addrinfo *res = NULL;
-        struct addrinfo hint;
-        memset(&hint, 0, sizeof(hint));
-        memset(&endpoint_ip, 0, sizeof(endpoint_ip));
-        if( lwip_getaddrinfo(remotePeerAddress, NULL, &hint, &res) != 0 ) {
+	for (int retry = 0; retry < 5; retry++)
+	{
+		ip_addr_t endpoint_ip = IPADDR4_INIT_BYTES(0, 0, 0, 0);
+		struct addrinfo *res = NULL;
+		struct addrinfo hint;
+		memset(&hint, 0, sizeof(hint));
+		memset(&endpoint_ip, 0, sizeof(endpoint_ip));
+		if (lwip_getaddrinfo(remotePeerAddress, NULL, &hint, &res) != 0)
+		{
 			vTaskDelay(pdMS_TO_TICKS(2000));
 			continue;
 		}
 		success_get_endpoint_ip = true;
-        struct in_addr addr4 = ((struct sockaddr_in *) (res->ai_addr))->sin_addr;
-        inet_addr_to_ip4addr(ip_2_ip4(&endpoint_ip), &addr4);
-        lwip_freeaddrinfo(res);
+		struct in_addr addr4 = ((struct sockaddr_in *)(res->ai_addr))->sin_addr;
+		inet_addr_to_ip4addr(ip_2_ip4(&endpoint_ip), &addr4);
+		lwip_freeaddrinfo(res);
 
-        peer.endpoint_ip = endpoint_ip;
-        log_i(TAG "%s is %3d.%3d.%3d.%3d"
-			, remotePeerAddress
-            , (endpoint_ip.u_addr.ip4.addr >>  0) & 0xff
-            , (endpoint_ip.u_addr.ip4.addr >>  8) & 0xff
-            , (endpoint_ip.u_addr.ip4.addr >> 16) & 0xff
-            , (endpoint_ip.u_addr.ip4.addr >> 24) & 0xff
-            );
+		peer.endpoint_ip = endpoint_ip;
+		log_i(TAG "%s is %3d.%3d.%3d.%3d", remotePeerAddress, (endpoint_ip.u_addr.ip4.addr >> 0) & 0xff, (endpoint_ip.u_addr.ip4.addr >> 8) & 0xff, (endpoint_ip.u_addr.ip4.addr >> 16) & 0xff, (endpoint_ip.u_addr.ip4.addr >> 24) & 0xff);
 		break;
-    }
-	if( !success_get_endpoint_ip  ) {
+	}
+	if (!success_get_endpoint_ip)
+	{
 		log_e(TAG "failed to get endpoint ip.");
 		return false;
 	}
-	
+
 	LOCK_TCPIP_CORE();
 	// Register the new WireGuard network interface with lwIP
 	wg_netif = netif_add(&wg_netif_struct, ip_2_ip4(&ipaddr), ip_2_ip4(&netmask), ip_2_ip4(&gateway), &wg, &wireguardif_init, &ip_input);
-	if( wg_netif == nullptr ) {
+	if (wg_netif == nullptr)
+	{
 		log_e(TAG "failed to initialize WG netif.");
 		return false;
 	}
@@ -152,26 +154,26 @@ bool WireGuard::begin(const IPAddress& localIP, const IPAddress& Subnet, const I
 	esp_netif_inherent_config_t inh = ESP_NETIF_INHERENT_DEFAULT_ETH();
 	inh.flags = (esp_netif_flags_t)(ESP_NETIF_FLAG_AUTOUP);
 	inh.route_prio = 20;
-  inh.get_ip_event = 0;
-  inh.lost_ip_event = 0;
+	inh.get_ip_event = 0;
+	inh.lost_ip_event = 0;
 	inh.if_key = "WG_DEF";
 	inh.if_desc = "wg";
 
 	static const esp_netif_netstack_config_t wg_netstack = {
 			.lwip = {
-					.init_fn  = wg_lwip_init,
+					.init_fn = wg_lwip_init,
 					.input_fn = wg_lwip_input,
-			}
-	};
+			}};
 	esp_netif_config_t cfg = {
-			.base     = &inh,
-			.driver   = nullptr,
-			.stack    = &wg_netstack,
+			.base = &inh,
+			.driver = nullptr,
+			.stack = &wg_netstack,
 	};
 
 	wg_esp_netif = esp_netif_new(&cfg);
-	if (!wg_esp_netif) {
-		log_w(TAG,"esp_netif_new failed");
+	if (!wg_esp_netif)
+	{
+		log_w(TAG, "esp_netif_new failed");
 		return false;
 	}
 
@@ -182,10 +184,10 @@ bool WireGuard::begin(const IPAddress& localIP, const IPAddress& Subnet, const I
 	ip_event_got_ip_t evt = {};
 	evt.esp_netif = wg_esp_netif;
 	evt.ip_changed = true;
-	evt.ip_info.ip.addr      = ipaddr.u_addr.ip4.addr;
-	evt.ip_info.gw.addr      = gateway.u_addr.ip4.addr;
+	evt.ip_info.ip.addr = ipaddr.u_addr.ip4.addr;
+	evt.ip_info.gw.addr = gateway.u_addr.ip4.addr;
 	evt.ip_info.netmask.addr = netmask.u_addr.ip4.addr;
-	
+
 	esp_netif_set_ip_info(wg_esp_netif, &evt.ip_info);
 	esp_netif_action_connected(wg_esp_netif, NULL, 0, NULL);
 
@@ -198,48 +200,53 @@ bool WireGuard::begin(const IPAddress& localIP, const IPAddress& Subnet, const I
 	peer.public_key = remotePeerPublicKey;
 	peer.preshared_key = NULL;
 	// Allow all IPs through tunnel
-    {
-        ip_addr_t allowed_ip = IPADDR4_INIT_BYTES(0, 0, 0, 0);
-        peer.allowed_ip = allowed_ip;
-        ip_addr_t allowed_mask = IPADDR4_INIT_BYTES(0, 0, 0, 0);
-        peer.allowed_mask = allowed_mask;
-    }
-	
+	{
+		ip_addr_t allowed_ip = IPADDR4_INIT_BYTES(0, 0, 0, 0);
+		peer.allowed_ip = allowed_ip;
+		ip_addr_t allowed_mask = IPADDR4_INIT_BYTES(0, 0, 0, 0);
+		peer.allowed_mask = allowed_mask;
+	}
+
 	peer.endport_port = remotePeerPort;
 
-    // Initialize the platform
-    wireguard_platform_init();
+	// Initialize the platform
+	wireguard_platform_init();
 	// Register the new WireGuard peer with the netwok interface
 	wireguardif_add_peer(wg_netif, &peer, &wireguard_peer_index);
-	if ((wireguard_peer_index != WIREGUARDIF_INVALID_INDEX) && !ip_addr_isany(&peer.endpoint_ip)) {
+	if ((wireguard_peer_index != WIREGUARDIF_INVALID_INDEX) && !ip_addr_isany(&peer.endpoint_ip))
+	{
 		// Start outbound connection to peer
-        log_i(TAG "connecting wireguard...");
+		log_i(TAG "connecting wireguard...");
 		wireguardif_connect(wg_netif, wireguard_peer_index);
 		// Save the current default interface for restoring when shutting down the WG interface.
 		previous_default_netif = netif_default;
 		// Set default interface to WG device.
-				LOCK_TCPIP_CORE();
-        netif_set_default(wg_netif);
-				UNLOCK_TCPIP_CORE();
+		LOCK_TCPIP_CORE();
+		netif_set_default(wg_netif);
+		UNLOCK_TCPIP_CORE();
 	}
 
 	this->_is_initialized = true;
 	return true;
 }
 
-esp_netif_t* WireGuard::netif() {
+esp_netif_t *WireGuard::netif()
+{
 	return wg_esp_netif;
 }
 
-bool WireGuard::begin(const IPAddress& localIP, const char* privateKey, const char* remotePeerAddress, const char* remotePeerPublicKey, uint16_t remotePeerPort) {
-	// Maintain compatiblity with old begin 
-	auto subnet = IPAddress(255,255,255,255);
-	auto gateway = IPAddress(0,0,0,0);
+bool WireGuard::begin(const IPAddress &localIP, const char *privateKey, const char *remotePeerAddress, const char *remotePeerPublicKey, uint16_t remotePeerPort)
+{
+	// Maintain compatiblity with old begin
+	auto subnet = IPAddress(255, 255, 255, 255);
+	auto gateway = IPAddress(0, 0, 0, 0);
 	return WireGuard::begin(localIP, subnet, gateway, privateKey, remotePeerAddress, remotePeerPublicKey, remotePeerPort);
 }
 
-void WireGuard::end() {
-	if( !this->_is_initialized ) return;
+void WireGuard::end()
+{
+	if (!this->_is_initialized)
+		return;
 
 	LOCK_TCPIP_CORE();
 	// Restore the default interface.
