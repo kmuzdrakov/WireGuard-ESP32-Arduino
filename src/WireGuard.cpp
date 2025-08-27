@@ -60,7 +60,7 @@ static void wg_lwip_input(void *h, void *buffer, size_t len, void *eb)
 
 static esp_err_t wg_driver_transmit(void *h, void *buffer, size_t len)
 {
-	log_w(TAG, "wg_driver_transmit called unexpectedly, len=%u", (unsigned)len);
+	log_w(TAG "wg_driver_transmit called unexpectedly, len=%u", (unsigned)len);
 	esp_netif_free_rx_buffer(h, buffer);
 
 	return ESP_OK;
@@ -173,7 +173,7 @@ bool WireGuard::begin(const IPAddress &localIP, const IPAddress &Subnet, const I
 	wg_esp_netif = esp_netif_new(&cfg);
 	if (!wg_esp_netif)
 	{
-		log_w(TAG, "esp_netif_new failed");
+		log_w(TAG "esp_netif_new failed");
 		return false;
 	}
 

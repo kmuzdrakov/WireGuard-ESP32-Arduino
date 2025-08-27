@@ -560,7 +560,7 @@ void wireguardif_network_rx(void *arg, struct udp_pcb *pcb, struct pbuf *p, cons
 	struct message_transport_data *msg_data;
 
 	uint8_t type = wireguard_get_message_type(data, len);
-	ESP_LOGV(TAG, "network_rx: %08x:%d", addr->u_addr.ip4.addr, port);
+	log_d(TAG "network_rx: %08x:%d", addr->u_addr.ip4.addr, port);
 
 	switch (type) {
 		case MESSAGE_HANDSHAKE_INITIATION:
@@ -610,7 +610,7 @@ void wireguardif_network_rx(void *arg, struct udp_pcb *pcb, struct pbuf *p, cons
 			break;
 
 		case MESSAGE_TRANSPORT_DATA:
-			ESP_LOGV(TAG, "TRANSPORT_DATA: %08x:%d", addr->u_addr.ip4.addr, port);
+			log_d(TAG "TRANSPORT_DATA: %08x:%d", addr->u_addr.ip4.addr, port);
 
 			msg_data = (struct message_transport_data *)data;
 			peer = peer_lookup_by_receiver(device, msg_data->receiver);
@@ -928,19 +928,19 @@ err_t wireguardif_init(struct netif *netif) {
 	char lwip_netif_name[8] = {0};
 	esp_netif_t *netif_handle = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
 	if (netif_handle == NULL) {
-	    ESP_LOGE(TAG, "No default STA interface");
+	    log_e(TAG "No default STA interface");
 	    result = ERR_IF;
 	    goto fail;
 	}
 	esp_err_t err = esp_netif_get_netif_impl_name(netif_handle, lwip_netif_name);
 	if (err != ESP_OK) {
-	    ESP_LOGE(TAG, "esp_netif_get_netif_impl_name failed: %s", esp_err_to_name(err));
+	    log_e(TAG "esp_netif_get_netif_impl_name failed: %s", esp_err_to_name(err));
 	    result = ERR_IF;
 	    goto fail;
 	}
 	underlying_netif = netif_find(lwip_netif_name);
 	if (underlying_netif == NULL) {
-	    ESP_LOGE(TAG, "netif_find: cannot find WIFI_STA_DEF");
+	    log_e(TAG "netif_find: cannot find WIFI_STA_DEF");
 	    result = ERR_IF;
 	    goto fail;
 	}
