@@ -39,6 +39,7 @@ configTime(9 * 60 * 60, 0, "ntp.jst.mfeed.ad.jp", "ntp.nict.jp", "time.google.co
 wg.begin(
     local_ip,           // IP address of the local interface
     private_key,        // Private key of the local interface
+    preshared_key,      // Pre-shared key with the remote interface for extended security. Could be NULL
     endpoint_address,   // Address of the endpoint peer.
     public_key,         // Public key of the endpoint peer.
     endpoint_port);     // Port pf the endpoint peer.
