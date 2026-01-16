@@ -28,6 +28,7 @@ extern "C"
 {
 #include "wireguardif.h"
 #include "wireguard-platform.h"
+#include "wireguard.h"
 }
 
 // Wireguard instance
@@ -92,6 +93,11 @@ static wg_driver_glue_t *create_wg_glue(struct netif *lwip)
 }
 
 bool WireGuard::begin(const IPAddress &localIP, const IPAddress &Subnet, const IPAddress &Gateway, const char *privateKey, const char *remotePeerAddress, const char *remotePeerPublicKey, uint16_t remotePeerPort)
+{
+    return begin(localIP, Subnet, Gateway, privateKey, remotePeerAddress, remotePeerPublicKey, NULL, remotePeerPort);
+}
+
+bool WireGuard::begin(const IPAddress &localIP, const IPAddress &Subnet, const IPAddress &Gateway, const char *privateKey, const char *remotePeerAddress, const char *remotePeerPublicKey, const char *remotePeerPresharedKey, uint16_t remotePeerPort)
 {
 	struct wireguardif_init_data wg;
 	struct wireguardif_peer peer;
@@ -198,7 +204,18 @@ bool WireGuard::begin(const IPAddress &localIP, const IPAddress &Subnet, const I
 	UNLOCK_TCPIP_CORE();
 
 	peer.public_key = remotePeerPublicKey;
-	peer.preshared_key = NULL;
+    uint8_t preshared_key[WIREGUARD_SESSION_KEY_LEN];
+    if (remotePeerPresharedKey != NULL) {
+        size_t key_len = sizeof(preshared_key);
+        if (wireguard_base64_decode(remotePeerPresharedKey, preshared_key, &key_len) && (key_len == WIREGUARD_SESSION_KEY_LEN)) {
+            peer.preshared_key = preshared_key;
+        } else {
+            log_e(TAG "failed to decode preshared key.");
+            peer.preshared_key = NULL;
+        }
+    } else {
+        peer.preshared_key = NULL;
+    }
 	// Allow all IPs through tunnel
 	{
 		ip_addr_t allowed_ip = IPADDR4_INIT_BYTES(0, 0, 0, 0);
@@ -237,10 +254,15 @@ esp_netif_t *WireGuard::netif()
 
 bool WireGuard::begin(const IPAddress &localIP, const char *privateKey, const char *remotePeerAddress, const char *remotePeerPublicKey, uint16_t remotePeerPort)
 {
+	return begin(localIP, privateKey, remotePeerAddress, remotePeerPublicKey, NULL, remotePeerPort);
+}
+
+bool WireGuard::begin(const IPAddress &localIP, const char *privateKey, const char *remotePeerAddress, const char *remotePeerPublicKey, const char *remotePeerPresharedKey, uint16_t remotePeerPort)
+{
 	// Maintain compatiblity with old begin
 	auto subnet = IPAddress(255, 255, 255, 255);
 	auto gateway = IPAddress(0, 0, 0, 0);
-	return WireGuard::begin(localIP, subnet, gateway, privateKey, remotePeerAddress, remotePeerPublicKey, remotePeerPort);
+	return WireGuard::begin(localIP, subnet, gateway, privateKey, remotePeerAddress, remotePeerPublicKey, remotePeerPresharedKey, remotePeerPort);
 }
 
 void WireGuard::end()
