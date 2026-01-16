@@ -36,7 +36,7 @@ static struct netif wg_netif_struct = {0};
 static struct netif *wg_netif = NULL;
 static esp_netif_t *wg_esp_netif = NULL;
 static struct netif *previous_default_netif = NULL;
-static uint8_t wireguard_peer_index = WIREGUARDIF_INVALID_INDEX;
+static uint8_t local_peer_index = WIREGUARDIF_INVALID_INDEX;
 
 #define TAG "[WireGuard] "
 
@@ -229,12 +229,12 @@ bool WireGuard::begin(const IPAddress &localIP, const IPAddress &Subnet, const I
 	// Initialize the platform
 	wireguard_platform_init();
 	// Register the new WireGuard peer with the netwok interface
-	wireguardif_add_peer(wg_netif, &peer, &wireguard_peer_index);
-	if ((wireguard_peer_index != WIREGUARDIF_INVALID_INDEX) && !ip_addr_isany(&peer.endpoint_ip))
+	wireguardif_add_peer(wg_netif, &peer, &local_peer_index);
+	if ((local_peer_index != WIREGUARDIF_INVALID_INDEX) && !ip_addr_isany(&peer.endpoint_ip))
 	{
 		// Start outbound connection to peer
 		log_i(TAG "connecting wireguard...");
-		wireguardif_connect(wg_netif, wireguard_peer_index);
+		wireguardif_connect(wg_netif, local_peer_index);
 		// Save the current default interface for restoring when shutting down the WG interface.
 		previous_default_netif = netif_default;
 		// Set default interface to WG device.
@@ -275,10 +275,10 @@ void WireGuard::end()
 	netif_set_default(previous_default_netif);
 	previous_default_netif = nullptr;
 	// Disconnect the WG interface.
-	wireguardif_disconnect(wg_netif, wireguard_peer_index);
+	wireguardif_disconnect(wg_netif, local_peer_index);
 	// Remove peer from the WG interface
-	wireguardif_remove_peer(wg_netif, wireguard_peer_index);
-	wireguard_peer_index = WIREGUARDIF_INVALID_INDEX;
+	wireguardif_remove_peer(wg_netif, local_peer_index);
+	local_peer_index = WIREGUARDIF_INVALID_INDEX;
 	// Shutdown the wireguard interface.
 	wireguardif_shutdown(wg_netif);
 	// Remove the WG interface;
